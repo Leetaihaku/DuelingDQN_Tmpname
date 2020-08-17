@@ -51,11 +51,6 @@ class PrioritizedDB:
             self.errordb =ErrorDB()
 
 
-
-
-
-
-
 class ErrorDB:
     def __init__(self):
         self.capacity = CAPACITY
@@ -79,8 +74,10 @@ class ErrorDB:
         rand_list = np.random.uniform(0, sigma_error_abs, BATCH_SIZE)
         rand_list = np.sort(rand_list)
 
+        ###
 
 
+        ###
 
 
     def update_error(self):
