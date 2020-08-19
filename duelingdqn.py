@@ -44,6 +44,15 @@ class NeuralNet(nn.Module):
         output = val + adv
         return output
 
+<<<<<<< HEAD
+=======
+class PrioritizedDB:
+        def __init__(self):
+            self.db = DB()
+            self.errordb =ErrorDB()
+
+
+>>>>>>> d9f29bddb54ac281567bbd7bcb552691346ae41d
 class ErrorDB:
     def __init__(self):
         self.capacity = CAPACITY
@@ -67,6 +76,7 @@ class ErrorDB:
         rand_list = np.random.uniform(0, sigma_error_abs, BATCH_SIZE)
         rand_list = np.sort(rand_list)
 
+<<<<<<< HEAD
         indexes = []
         idx = 0
         tmp_sigma_error_abs = 0
@@ -74,12 +84,19 @@ class ErrorDB:
             while tmp_sigma_error_abs < rand_num:
                 tmp_sigma_error_abs += abs(self.memory[idx]) + ERROR_EPSILON
                 idx += 1
+=======
+        ###
+>>>>>>> d9f29bddb54ac281567bbd7bcb552691346ae41d
 
             if idx >= len(self.memory):
                 idx = len(self.memory) - 1
             indexes.append(idx)
 
+<<<<<<< HEAD
         return indexes
+=======
+        ###
+>>>>>>> d9f29bddb54ac281567bbd7bcb552691346ae41d
 
     def update_error(self, updated_error):
         self.memory = updated_error
