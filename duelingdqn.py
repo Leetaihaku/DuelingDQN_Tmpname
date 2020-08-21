@@ -1,227 +1,196 @@
 import torch
-import numpy as np
 import gym
-import copy
-import random
-
-from collections import namedtuple
-from torch import nn as nn
+from torch import nn
 from torch.nn import functional as F
 from torch.optim import Adam
-
-EPISODES = 1000
-STEPS = 200
-NODES = 32
-LEARNING_RATE = 0.05
-NUM_STATES = 3
-NUM_ACTIONS = 1
+import numpy as np
+import copy
+import random
+from collections import namedtuple
+ENV = 'CartPole-v0'
+PATH = 'duelingdqn_ori.pth'
+EPISODES = 10000
+STEPS = 400
+TRAIN_START = 1000
+NUM_STATES = 4
+NUM_ACTIONS = 2
+NODES = 16
+LEARNING_RATE = 0.01
 CAPACITY = 10000
 BATCH_SIZE = 32
-EPSILON = 1
-EPSILON_DISCOUNT = 0.001
-ERROR_EPSILON = 0.0001
-REWARD_DISCOUNT = 0.9
+DISCOUNT = 0.9
+EPSILON_DISCOUNT = 0.0001
+DATA = namedtuple('DATA', ('state','action','reward','next_state','done'))
 
-DATA = namedtuple('DATA', ('state', 'action', 'reward', 'next_reward', 'done'))
-
-#신경망
-class NeuralNet(nn.Module):
-    def __init__(self, Lin, Lmid, Lout):
-        super(NeuralNet, self).__init__()
-        self.fc1 = nn.Linear(Lin, Lmid)
-        self.fc2 = nn.Linear(Lmid, Lmid)
-
-        self.fc3_adv = nn.Linear(Lmid, Lout)
-        self.fc3_v = nn.Linear(Lmid, 1)
-
-    def forward(self, x):
-        ac1 = F.relu(self.fc1(x))
-        ac2 = F.relu(self.fc2(ac1))
-
-        adv = self.fc3_adv(ac2)
-        val = self.fc3_v(ac2)
-
-        output = val + adv
-        return output
-
-<<<<<<< HEAD
-=======
-class PrioritizedDB:
-        def __init__(self):
-            self.db = DB()
-            self.errordb =ErrorDB()
-
-
->>>>>>> d9f29bddb54ac281567bbd7bcb552691346ae41d
-class ErrorDB:
+class db:
     def __init__(self):
         self.capacity = CAPACITY
         self.memory = []
         self.index = 0
-
-    def __len__(self):
-        return len(self.memory)
-
-    def save(self, error):
-        if len(self.memory) < self.capacity:
-            self.memory.append(None)
-
-        self.memory[self.index] = error
-        self.index = (self.index+1) % self.capacity
-
-    def prioritized_index(self):
-        sigma_error_abs = np.sum(np.absolute(self.memory))
-        sigma_error_abs += ERROR_EPSILON * self.__len__()
-
-        rand_list = np.random.uniform(0, sigma_error_abs, BATCH_SIZE)
-        rand_list = np.sort(rand_list)
-
-<<<<<<< HEAD
-        indexes = []
-        idx = 0
-        tmp_sigma_error_abs = 0
-        for rand_num in rand_list:
-            while tmp_sigma_error_abs < rand_num:
-                tmp_sigma_error_abs += abs(self.memory[idx]) + ERROR_EPSILON
-                idx += 1
-=======
-        ###
->>>>>>> d9f29bddb54ac281567bbd7bcb552691346ae41d
-
-            if idx >= len(self.memory):
-                idx = len(self.memory) - 1
-            indexes.append(idx)
-
-<<<<<<< HEAD
-        return indexes
-=======
-        ###
->>>>>>> d9f29bddb54ac281567bbd7bcb552691346ae41d
-
-    def update_error(self, updated_error):
-        self.memory = updated_error
-
-class DB:
-    def __init__(self):
-        self.capacity = CAPACITY
-        self.memory = []
-        self.index = 0
-
-    def __len__(self):
-        return len(self.memory)
 
     def save(self, state, action, reward, next_state, done):
-        if len(self.memory) < self.capacity:
+        if self.__len__() < CAPACITY:
             self.memory.append(None)
-
-        self.memory[self.index] = DATA(state, action, reward, next_state, done)
-        self.index = (self.index+1) % self.capacity
+        self.memory[self.index] = DATA(state,action,reward,next_state,done)
+        self.index = (self.index+1)%CAPACITY
 
     def sampling(self):
         return random.sample(self.memory, BATCH_SIZE)
 
-class Brain:
-    def __init__(self):
-        self.q = NeuralNet(NUM_STATES, NODES, NUM_ACTIONS)
-        self.tq = NeuralNet(NUM_STATES, NODES, NUM_ACTIONS)
-        self.optimizer = Adam(self.q.parameters(), lr=LEARNING_RATE)
-        self.db = DB()
-        self.error = ErrorDB()
-        self.epsilon = EPSILON
+    def __len__(self):
+        return len(self.memory)
 
-    def action_order(self, state):
-        if self.epsilon - EPSILON_DISCOUNT < random.uniform(0, 1):
-            state = torch.tensor(state).float()
+class neural_network:
+    def modeling_nn(self):
+        model = nn.Sequential()
+        model.add_module('fc1', nn.Linear(NUM_STATES, NODES))
+        model.add_module('relu1', nn.ReLU())
+        model.add_module('drop1', nn.Dropout(p=0.5))
+        model.add_module('fc2', nn.Linear(NODES, NODES))
+        model.add_module('relu2', nn.ReLU())
+        model.add_module('drop2', nn.Dropout(p=0.5))
+        model.add_module('fc3', nn.Linear(NODES, NUM_ACTIONS))
+        return model
+
+class brain:
+    def __init__(self):
+        self.db = db()
+        self.nn = neural_network()
+        self.Q = self.nn.modeling_nn()
+        self.TQ = self.nn.modeling_nn()
+        self.optim = torch.optim.Adam(self.Q.parameters(), lr=LEARNING_RATE)
+        self.epsilon = 1.0
+        self.epsilon_discount = EPSILON_DISCOUNT
+
+    def action(self,state):
+        if random.uniform(0, 1) > self.epsilon:
+            state = torch.from_numpy(state).float()
+            self.Q.eval()
             with torch.no_grad():
-                action = self.q.forward(state)
+                action = torch.argmax(self.Q(state)).item()
         else:
-            action = torch.tensor([random.uniform(-2, 2)])
+            action = random.randrange(0, NUM_ACTIONS)
         return action
 
-    def update_q(self, episode):
-        #print(self.q.fc1.weight)
-        if self.db.__len__() < BATCH_SIZE:
-            return
-
-        if episode < 30:
-            batch = self.db.sampling()
-        else:
-            batch = self.error.prioritized_index()
-            batch = [self.db.memory[n] for n in batch]
+    def update_q(self):
+        batch = self.db.sampling()
         batch = DATA(*zip(*batch))
         state_serial = batch.state
-        #action_serial = batch.action
+        action_serial = batch.action
         reward_serial = batch.reward
-        next_state_serial = batch.next_reward
+        next_state_serial = batch.next_state
         done_serial = batch.done
 
-        state_serial = torch.stack(state_serial).float()
-        #action_serial = torch.stack(action_serial).float()
-        reward_serial = torch.stack(reward_serial).float().reshape([BATCH_SIZE, 1])
-        next_state_serial = torch.stack(next_state_serial).float()
-        done_serial = torch.stack(done_serial).reshape([BATCH_SIZE, 1])
+        state_serial = torch.tensor(state_serial).float()
+        action_serial = torch.tensor(action_serial).long().reshape(BATCH_SIZE, 1)
+        reward_serial = torch.tensor(reward_serial).float().reshape(BATCH_SIZE, 1)
+        next_state_serial = torch.tensor(next_state_serial).float()
+        done_serial = torch.tensor(done_serial).reshape(BATCH_SIZE, 1)
 
-        self.q.eval()
-        self.tq.eval()
-        next_max_idx = self.q.forward(next_state_serial).max(1)[1].reshape([BATCH_SIZE, 1])
-        next_by_tq = torch.gather(self.tq.forward(next_state_serial), 1, next_max_idx)
-        target_q_serial = reward_serial + REWARD_DISCOUNT * (~done_serial) * next_by_tq
+        self.Q.eval()
+        self.TQ.eval()
+        q_next_idx = self.Q(next_state_serial).max(1)[1]
+        tq_next_val = torch.gather(self.TQ(next_state_serial), 1, torch.reshape(q_next_idx, [BATCH_SIZE, 1]))
+        tq_next_val = reward_serial + DISCOUNT * tq_next_val * (~done_serial)
+        q_val = torch.gather(self.Q(state_serial), 1, torch.reshape(action_serial,[BATCH_SIZE, 1]))
 
-        self.q.train()
-        q_serial = torch.gather(self.q.forward(state_serial), 1, next_max_idx)
-        loss = F.smooth_l1_loss(q_serial, target_q_serial)
-        self.optimizer.zero_grad()
+        self.Q.train()
+        loss = F.smooth_l1_loss(q_val, tq_next_val)
+        self.optim.zero_grad()
         loss.backward()
-        self.optimizer.step()
+        self.optim.step()
 
     def update_tq(self):
-        self.tq = copy.deepcopy(self.q)
+        self.TQ = copy.deepcopy(self.Q)
 
-class Agent:
+class agent:
     def __init__(self):
-        self.brain = Brain()
+        self.brain = brain()
 
-    def action_request(self, state):
-        return self.brain.action_order(state)
-
-    def save_to_db(self, state, action, reward, next_state, done):
+    def save_to_db(self,state, action, reward, next_state, done):
         self.brain.db.save(state, action, reward, next_state, done)
 
-    def save_to_errordb(self, error):
-        self.brain.error.save(error)
+    def action_request(self,state):
+        return self.brain.action(state)
 
-    def train(self, episode):
-        self.brain.update_q(episode)
+    def learn(self):
+        self.brain.update_q()
 
     def update(self):
         self.brain.update_tq()
 
+def reuse():
+    print('모델을 선택해주세요')
+    print('[1]새 학습하기\t[2]이어 학습하기\t[3]테스트모드')
+    answer = input()
+    if answer == '1':
+        return 'new'
+    elif answer == '2':
+        return 'old'
+    elif answer == '3':
+        return 'test'
+    else:
+        print('입력 값이 상이합니다')
+        exit()
+
+def reward_calculator(next_state):
+    position = abs(0 - next_state[0])
+    angle = abs(0 - next_state[2])
+    return -(position + angle)
+
 if __name__ == '__main__':
-    env = gym.make('Pendulum-v0')
-    agent = Agent()
-    scores = []
-    for E in range(EPISODES):
-        print('ep', E)
-        state = env.reset()
-        score = 0
-        for S in range(STEPS):
-            if E % 100 == 0:
+    env = gym.make(ENV)
+    agent = agent()
+    answer = reuse()
+    if answer != 'new':
+        agent.brain.Q.load_state_dict(torch.load(PATH))
+        agent.brain.TQ.load_state_dict(torch.load(PATH))
+    if answer == 'test':
+        '''테스트모드'''
+        agent.brain.Q.eval()
+        agent.brain.TQ.eval()
+        agent.brain.epsilon = 0
+        for E in range(EPISODES):
+            state = env.reset()
+            score = 0
+            for S in range(STEPS):
                 env.render()
-            action = agent.action_request(state)
-            next_state, reward, done, info = env.step(np.array(action))
-            if next_state[0] >= 0 and next_state[1] >= 0 and next_state[2] >= 1:
-                if next_state[0] < state[0] and next_state[1] < next_state[1] and next_state[2] > next_state[2]:
-                    reward += 1
-            agent.save_to_db(torch.tensor(state), torch.tensor(action), torch.tensor(reward), torch.tensor(next_state), torch.tensor(done))
-            agent.save_to_errordb(0)
-            agent.train(E)
-            if done:
-                print('EPISODES : ', E, 'STEPS : ', S, 'SCORES : ', score, 'EPSILON : ', agent.brain.epsilon)
-                agent.brain.epsilon -= EPSILON_DISCOUNT
-                break
-            else:
-                state = next_state
-                score += reward
-        agent.update()
-        scores.append(score)
-    env.close()
+                action = agent.action_request(state)
+                next_state, reward, done, _ = env.step(action)
+                if done:
+                    print('EPISODE : ', E, 'SCORE : ', score, 'EPSILON', agent.brain.epsilon)
+                    break
+                else:
+                    state = next_state
+                    score += reward
+        env.close()
+    else:
+        '''훈련모드'''
+        for E in range(EPISODES):
+            state = env.reset()
+            score = 0
+            for S in range(STEPS):
+                if E%100 == 0 and E!=0:
+                    env.render()
+                action = agent.action_request(state)
+                next_state, reward, done, _ = env.step(action)
+                #reward += reward_calculator(next_state)
+                agent.save_to_db(state, action, reward, next_state, done)
+                if agent.brain.db.__len__() >= TRAIN_START:
+                    agent.learn()
+                if done:
+                    print('EPISODE : ', E, 'SCORE : ', score, 'EPSILON', agent.brain.epsilon)
+                    break
+                else:
+                    state = next_state
+                    score += reward
+            agent.brain.epsilon -= agent.brain.epsilon_discount
+            agent.update()
+        print('학습 결과를 저장하시겠습니까? [Y/N]')
+        answer = input()
+        if answer == 'y' or answer == 'Y':
+            torch.save(agent.brain.Q.state_dict(), PATH)
+        env.close()
+
+
+
